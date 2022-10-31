@@ -1,0 +1,120 @@
+Kubernetes Steps 
+Master and Working node Requremets
+1. Docker
+2. kubeadm, Kubectl, kubelet
+3. Docker driver must be systemd insted of cgroup
+4. Delete file from /etc/containerd called config.toml or disable 
+5. swap off
+
+SWAP OFF 
+swapoff -a
+vim /etc/fstab (comment out swap)
+rm -rf /swap.img
+
+Bash Scripts: 
+Docker install bash file 
+#!/bin/bash
+#apt-get remove docker docker-engine docker.io containerd runc
+echo "RUN FROM ROOT or ADD SUDO BEFORE CMD"
+apt-get update -y
+apt-get install -y ca-certificates curl gnupg lsb-release
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update -y
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+
+kubeadm,kubelet,Kubectl install bash
+#!/bin/bash 
+apt-get update -y
+apt-get install -y apt-transport-https ca-certificates curl
+curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+apt-get update -y
+apt-get install -y kubelet kubeadm kubectl
+apt-mark hold kubelet kubeadm kubectl
+
+Cgroup to systemd
+vim /etc/docker/daemon.json                                 # input those line 
+{
+	"exec-opts": ["native.cgroupdriver=systemd" ]
+}
+systemctl restart docker
+reboot 
+To check 
+docker info | grep "Driver"
+Storage Driver: overlay2
+ Logging Driver: json-file
+WARNING: No swap limit support
+ Cgroup Driver: systemd
+
+
+Master/Cluster delete 
+kubeadm reset
+
+Master-Node 
+Steps:
+1. 
+kubeadm init --pod-network-cidr=10.250.0.0/16
+
+```
+To start using your cluster, you need to run the following as a regular user:
+
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+Alternatively, if you are the root user, you can run:
+
+  export KUBECONFIG=/etc/kubernetes/admin.conf ###Copy the line######
+
+```
+2. 
+vim .bashrc 
+export KUBECONFIG=/etc/kubernetes/admin.conf (save and exit)
+source .bashrc
+
+3. 
+Network addons flannel configure 
+mkdir net-addons
+cd net-addons
+wget https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+kubectl apply -f kube-flannel.yml   
+# kubectl delete -f kube-flannel.yml (you need to go the directory then delete)
+
+4.Check pods 
+kubectl get pods -A 
+NAMESPACE      NAME                             READY   STATUS    RESTARTS   AGE
+kube-flannel   kube-flannel-ds-ckn6r            1/1     Running   0          2m15s
+kube-system    coredns-565d847f94-7bcs9         1/1     Running   0          17m
+kube-system    coredns-565d847f94-zwdc2         1/1     Running   0          17m
+kube-system    etcd-test-1                      1/1     Running   0          17m
+kube-system    kube-apiserver-test-1            1/1     Running   0          17m
+kube-system    kube-controller-manager-test-1   1/1     Running   0          17m
+kube-system    kube-proxy-hzj8f                 1/1     Running   0          17m
+kube-system    kube-scheduler-test-1            1/1     Running   0          17m
+
+5.Check pods 
+kubectl get nodes 
+NAME     STATUS   ROLES           AGE   VERSION
+test-1   Ready    control-plane   18m   v1.25.0
+
+6.Create token 
+kubeadm token create
+kubeadm token list 
+ 
+9.Worker node join cmd 
+kubeadm token create --print-join-command
+kubeadm join 192.168.122.12:6443 --token ja8jt6.lmxubbcd2l58oox0 --discovery-token-ca-cert-hash sha256:b38a931dc8183eb11c00d8982a90a44f1baeb0dbd2475d980ad2814bfdeb2662
+
+8.Cluster info
+kubectl cluster-info
+
+Worker-Node Join 
+kubeadm join 192.168.122.12:6443 --token ja8jt6.lmxubbcd2l58oox0 --discovery-token-ca-cert-hash sha256:b38a931dc8183eb11c00d8982a90a44f1baeb0dbd2475d980ad2814bfdeb2662
+
